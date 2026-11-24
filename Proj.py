@@ -5,6 +5,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 from sklearn.metrics import f1_score, confusion_matrix, ConfusionMatrixDisplay
+from torch.utils.data import TensorDataset, DataLoader
+
 
 #Hyperparameters
 learningRate = 0.001
@@ -14,15 +16,15 @@ test_size = 0.15
 val_size = 0.15
 randomizationSeed = 6711
 torch.manual_seed(randomizationSeed)
+batch_size = 32
+
 
 data = pd.read_csv("Occupancy_Estimation.csv")
-
 X = data.drop(columns=[
     "Date",
     "Time",
     "Room_Occupancy_Count"
 ])
-
 y = data["Room_Occupancy_Count"]
 
 #data splitting int training, validation, and testing sets, selected randomly
@@ -34,7 +36,6 @@ X_train_val, X_test, y_train_val, y_test = train_test_split(
     stratify=y,
     random_state=randomizationSeed
 )
-
 val_relative_size = val_size / (1 - test_size) 
 
 X_train, X_val, y_train, y_val = train_test_split(
@@ -60,6 +61,16 @@ X_test = torch.tensor(X_test, dtype=torch.float32)
 y_train = torch.tensor(y_train.to_numpy(), dtype=torch.long)
 y_val = torch.tensor(y_val.to_numpy(), dtype=torch.long)
 y_test = torch.tensor(y_test.to_numpy(), dtype=torch.long)
+
+#enable below to set batch size to the total set of training data (update weights once per epoch instead of per set batch)
+#batch_size = len(X_train)
+
+train_dataset = TensorDataset(X_train, y_train)
+train_loader = DataLoader(
+    train_dataset,
+    batch_size=batch_size,
+    shuffle=True
+)
 
 class OccupancyMLP(nn.Module):
     def __init__(self, input_size):
@@ -94,13 +105,16 @@ val_accuracies = []
 for epoch in range(epochs):
 
     model.train()
+    total_train_loss = 0
 
-    outputs = model(X_train)
-    train_loss = loss_function(outputs, y_train)
-
-    optimizer.zero_grad()
-    train_loss.backward()
-    optimizer.step()
+    for batch_X, batch_y in train_loader:
+        outputs = model(batch_X)
+        loss = loss_function(outputs, batch_y)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        total_train_loss += loss.item()
+    train_loss = total_train_loss / len(train_loader)
 
     model.eval()
 
@@ -111,14 +125,14 @@ for epoch in range(epochs):
         val_predictions = torch.argmax(val_outputs, dim=1)
         val_accuracy = (val_predictions == y_val).float().mean()
 
-    train_losses.append(train_loss.item())
+    train_losses.append(train_loss)
     val_losses.append(val_loss.item())
     val_accuracies.append(val_accuracy.item())
 
     if epoch % 10 == 0:
         print(
             "Epoch:", epoch,
-            "Train Loss:", train_loss.item(),
+            "Train Loss:", train_loss,
             "Val Loss:", val_loss.item(),
             "Val Accuracy:", val_accuracy.item()
         )
