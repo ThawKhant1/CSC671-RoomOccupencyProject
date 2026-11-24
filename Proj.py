@@ -4,7 +4,7 @@ import torch.nn as nn
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
-
+from sklearn.metrics import f1_score, confusion_matrix, ConfusionMatrixDisplay
 
 #Hyperparameters
 learningRate = 0.001
@@ -12,7 +12,8 @@ epochs = 100
 #training proportion is remaining data
 test_size = 0.15
 val_size = 0.15
-
+randomizationSeed = 6711
+torch.manual_seed(randomizationSeed)
 
 data = pd.read_csv("Occupancy_Estimation.csv")
 
@@ -30,7 +31,8 @@ X_train_val, X_test, y_train_val, y_test = train_test_split(
     X,
     y,
     test_size=test_size,
-    stratify=y
+    stratify=y,
+    random_state=randomizationSeed
 )
 
 val_relative_size = val_size / (1 - test_size) 
@@ -39,7 +41,8 @@ X_train, X_val, y_train, y_val = train_test_split(
     X_train_val,
     y_train_val,
     test_size=val_relative_size,
-    stratify=y_train_val
+    stratify=y_train_val,
+    random_state=randomizationSeed
 )
 
 #normalize training data, use sd and mean of training data to normalize testing and validation data
@@ -127,9 +130,28 @@ with torch.no_grad():
     test_outputs = model(X_test)
     test_predictions = torch.argmax(test_outputs, dim=1)
 
-    test_accuracy = (test_predictions == y_test).float().mean()
+test_accuracy = (test_predictions == y_test).float().mean()
+cm = confusion_matrix(
+    y_test.numpy(),
+    test_predictions.numpy()
+)
+
+disp = ConfusionMatrixDisplay(
+    confusion_matrix=cm,
+    display_labels=[0, 1, 2, 3]
+)
+
+disp.plot()
+plt.title("Test Confusion Matrix")
+macro_f1 = f1_score(
+    y_test.numpy(),
+    test_predictions.numpy(),
+    average="macro"
+)
 
 print("Test Accuracy:", test_accuracy.item())
+
+print("Macro F1:", macro_f1)
 
 #training/validation loss graph
 plt.figure()
