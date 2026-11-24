@@ -16,6 +16,7 @@ test_size = 0.15
 val_size = 0.15
 randomizationSeed = 6711
 torch.manual_seed(randomizationSeed)
+#can set batch size to total training size so it'd update weights once per epoch by changing at lines 66-67
 batch_size = 32
 
 
